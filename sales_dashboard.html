@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Dashboard — Анализ продаж</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #16161d;
+    --surface2: #1e1e28;
+    --border: #2a2a38;
+    --accent: #7c6cfc;
+    --accent2: #f7c948;
+    --accent3: #3ecfaa;
+    --accent4: #f76c8a;
+    --text: #e8e8f0;
+    --muted: #7a7a96;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* HEADER */
+  .header {
+    padding: 28px 36px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header-left h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  .header-left p { font-size: 13px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+  .year-tabs { display: flex; gap: 6px; }
+  .year-tab {
+    padding: 7px 18px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-family: var(--mono);
+    font-size: 13px; cursor: pointer; transition: all 0.15s;
+  }
+  .year-tab:hover { border-color: var(--accent); color: var(--text); }
+  .year-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* LAYOUT */
+  .dashboard { padding: 28px 36px; display: grid; gap: 20px; }
+
+  /* KPI ROW */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 22px;
+    position: relative; overflow: hidden;
+  }
+  .kpi::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .kpi.c1::before { background: var(--accent); }
+  .kpi.c2::before { background: var(--accent2); }
+  .kpi.c3::before { background: var(--accent3); }
+  .kpi.c4::before { background: var(--accent4); }
+  .kpi-label { font-size: 11px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .kpi-value { font-size: 28px; font-weight: 600; letter-spacing: -1px; line-height: 1; }
+  .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+  .kpi.c1 .kpi-value { color: var(--accent); }
+  .kpi.c2 .kpi-value { color: var(--accent2); }
+  .kpi.c3 .kpi-value { color: var(--accent3); }
+  .kpi.c4 .kpi-value { color: var(--accent4); }
+
+  /* CHARTS GRID */
+  .charts-main { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+  .charts-bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* CARD */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px 24px;
+  }
+  .card-title {
+    font-size: 12px; font-family: var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chart-wrap { position: relative; }
+
+  /* TOP CLIENTS TABLE */
+  .client-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+  }
+  .client-row:last-child { border-bottom: none; }
+  .client-rank { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 18px; }
+  .client-bar-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
+  .client-bar { height: 100%; border-radius: 2px; background: var(--accent); }
+  .client-name { font-size: 13px; width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .client-val { font-family: var(--mono); font-size: 12px; color: var(--accent2); text-align: right; min-width: 80px; }
+
+  /* FOOTER */
+  .footer { padding: 16px 36px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Sales Dashboard</h1>
+    <p>sales_data_utf8.csv · 2823 записи · 2003–2005</p>
+  </div>
+  <div class="year-tabs">
+    <button class="year-tab active" onclick="setYear('all')">Все</button>
+    <button class="year-tab" onclick="setYear(2003)">2003</button>
+    <button class="year-tab" onclick="setYear(2004)">2004</button>
+    <button class="year-tab" onclick="setYear(2005)">2005</button>
+  </div>
+</div>
+
+<div class="dashboard">
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi c1">
+      <div class="kpi-label">Общая выручка</div>
+      <div class="kpi-value" id="kpi-rev">$10.03M</div>
+      <div class="kpi-sub" id="kpi-rev-sub">за весь период</div>
+    </div>
+    <div class="kpi c2">
+      <div class="kpi-label">Уникальных заказов</div>
+      <div class="kpi-value" id="kpi-ord">307</div>
+      <div class="kpi-sub" id="kpi-ord-sub">всего заказов</div>
+    </div>
+    <div class="kpi c3">
+      <div class="kpi-label">Средний чек</div>
+      <div class="kpi-value" id="kpi-avg">$32.7K</div>
+      <div class="kpi-sub" id="kpi-avg-sub">на заказ</div>
+    </div>
+    <div class="kpi c4">
+      <div class="kpi-label">Товаров продано</div>
+      <div class="kpi-value" id="kpi-qty">99 067</div>
+      <div class="kpi-sub" id="kpi-qty-sub">единиц</div>
+    </div>
+  </div>
+
+  <!-- Main charts -->
+  <div class="charts-main">
+    <div class="card">
+      <div class="card-title">Динамика продаж по месяцам</div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="lineChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Категории товаров</div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="donutChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom row -->
+  <div class="charts-bottom">
+    <div class="card">
+      <div class="card-title">Территории</div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="terrChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Размер сделки</div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="dealChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Топ-10 клиентов по выручке</div>
+      <div id="clientList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Данные: sales_data_utf8.csv · Анализ продаж магазина 2003–2005</div>
+
+<script>
+// ── RAW DATA ──────────────────────────────────────────────
+const RAW = {
+  monthly: {
+    2003: {1:129753.6,2:140836.19,3:174504.9,4:201609.55,5:192673.11,6:168082.56,7:187731.88,8:197809.3,9:263973.36,10:568290.97,11:1029837.66,12:261876.46},
+    2004: {1:316577.42,2:311419.53,3:205733.73,4:206148.12,5:273438.39,6:286674.22,7:327144.09,8:461501.27,9:320750.91,10:552924.25,11:1089048.01,12:372802.66},
+    2005: {1:339543.42,2:358186.18,3:374262.76,4:261633.29,5:457861.06}
+  },
+  productline: {
+    "Classic Cars":3919615.66,"Vintage Cars":1903150.84,"Motorcycles":1166388.34,
+    "Trucks and Buses":1127789.84,"Planes":975003.57,"Ships":714437.13,"Trains":226243.47
+  },
+  territory: {"EMEA":4979272.41,"Unknown":3852061.39,"APAC":746121.83,"Japan":455173.22},
+  dealsize: {"Large":1302119.26,"Medium":6087432.24,"Small":2643077.35},
+  orders: {2003:104, 2004:144, 2005:59, all:307},
+  qty: {2003:34612, 2004:46824, 2005:17631, all:99067},
+  revenue: {2003:3516979.54, 2004:4724162.60, 2005:1791486.71, all:10032628.85},
+  clients: {
+    "Diego Freyre":912294.11,"Valarie Nelson":654858.06,"Peter Ferguson":200995.41,
+    "Jeff Young":197736.94,"Janine Labrune":180124.9,"Eric Natividad":172989.68,
+    "Kwai Yu":164069.44,"Sue Frick":160010.27,"Victoria Ashworth":157807.81,"Anna O'Hara":153996.13
+  }
+};
+
+// ── UTILS ─────────────────────────────────────────────────
+const MONTHS = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+const COLORS = ['#7c6cfc','#f7c948','#3ecfaa','#f76c8a','#60c3f7','#fc9c6c','#b57bee'];
+
+function fmt(n) {
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toFixed(0);
+}
+function fmtFull(n) { return '$' + n.toLocaleString('ru-RU', {maximumFractionDigits:0}); }
+
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: {
+    backgroundColor: '#1e1e28', borderColor: '#2a2a38', borderWidth: 1,
+    titleColor: '#e8e8f0', bodyColor: '#7a7a96', padding: 10,
+    callbacks: { label: ctx => ' ' + fmtFull(ctx.parsed.y ?? ctx.parsed) }
+  }},
+  scales: {}
+};
+
+// ── LINE CHART ────────────────────────────────────────────
+let lineChart, donutChart, terrChart, dealChart;
+
+function buildLineData(year) {
+  if (year === 'all') {
+    const labels = [], data2003 = [], data2004 = [], data2005 = [];
+    for (let m = 1; m <= 12; m++) {
+      labels.push(MONTHS[m-1]);
+      data2003.push(RAW.monthly[2003][m] || 0);
+      data2004.push(RAW.monthly[2004][m] || 0);
+      data2005.push(RAW.monthly[2005][m] || null);
+    }
+    return {
+      labels,
+      datasets: [
+        { label:'2003', data:data2003, borderColor:'#7c6cfc', backgroundColor:'rgba(124,108,252,0.08)', fill:true, tension:0.4, pointRadius:3, pointHoverRadius:6, borderWidth:2 },
+        { label:'2004', data:data2004, borderColor:'#f7c948', backgroundColor:'rgba(247,201,72,0.08)', fill:true, tension:0.4, pointRadius:3, pointHoverRadius:6, borderWidth:2 },
+        { label:'2005', data:data2005, borderColor:'#3ecfaa', backgroundColor:'rgba(62,207,170,0.08)', fill:true, tension:0.4, pointRadius:3, pointHoverRadius:6, borderWidth:2, spanGaps:false },
+      ]
+    };
+  } else {
+    const d = RAW.monthly[year];
+    const labels = Object.keys(d).map(m => MONTHS[m-1]);
+    const data = Object.values(d);
+    const color = year===2003?'#7c6cfc': year===2004?'#f7c948':'#3ecfaa';
+    return {
+      labels,
+      datasets: [{ label: String(year), data, borderColor: color, backgroundColor: color+'18', fill:true, tension:0.4, pointRadius:4, pointHoverRadius:7, borderWidth:2 }]
+    };
+  }
+}
+
+function initLineChart(year) {
+  const ctx = document.getElementById('lineChart').getContext('2d');
+  lineChart = new Chart(ctx, {
+    type: 'line',
+    data: buildLineData(year),
+    options: {
+      ...chartDefaults,
+      plugins: {
+        ...chartDefaults.plugins,
+        legend: {
+          display: year === 'all', position: 'top', align: 'end',
+          labels: { color: '#7a7a96', font: { family: 'DM Mono', size: 11 }, boxWidth: 12, padding: 16 }
+        },
+        tooltip: { ...chartDefaults.plugins.tooltip, callbacks: { label: ctx => ' ' + fmtFull(ctx.parsed.y) } }
+      },
+      scales: {
+        x: { grid: { color: '#2a2a38' }, ticks: { color: '#7a7a96', font: { family: 'DM Mono', size: 11 } } },
+        y: { grid: { color: '#2a2a38' }, ticks: { color: '#7a7a96', font: { family: 'DM Mono', size: 11 }, callback: v => fmt(v) } }
+      }
+    }
+  });
+}
+
+function initDonutChart() {
+  const ctx = document.getElementById('donutChart').getContext('2d');
+  const labels = Object.keys(RAW.productline);
+  const data = Object.values(RAW.productline);
+  donutChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: COLORS, borderColor: '#16161d', borderWidth: 3, hoverOffset: 8 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: { display: true, position: 'right', labels: { color: '#7a7a96', font: { family: 'DM Mono', size: 10 }, boxWidth: 10, padding: 8 } },
+        tooltip: { backgroundColor: '#1e1e28', borderColor: '#2a2a38', borderWidth: 1, titleColor: '#e8e8f0', bodyColor: '#7a7a96', padding: 10,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+              return ' ' + fmtFull(ctx.parsed) + ' (' + (ctx.parsed/total*100).toFixed(1) + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function initTerrChart() {
+  const ctx = document.getElementById('terrChart').getContext('2d');
+  const labels = Object.keys(RAW.territory);
+  const data = Object.values(RAW.territory);
+  terrChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: ['#7c6cfc','#2a2a38','#3ecfaa','#f7c948'], borderRadius: 6, borderSkipped: false }] },
+    options: {
+      ...chartDefaults,
+      indexAxis: 'y',
+      plugins: { ...chartDefaults.plugins, tooltip: { ...chartDefaults.plugins.tooltip, callbacks: { label: ctx => ' ' + fmtFull(ctx.parsed.x) } } },
+      scales: {
+        x: { grid: { color: '#2a2a38' }, ticks: { color: '#7a7a96', font: { family: 'DM Mono', size: 10 }, callback: v => fmt(v) } },
+        y: { grid: { display: false }, ticks: { color: '#e8e8f0', font: { family: 'DM Mono', size: 11 } } }
+      }
+    }
+  });
+}
+
+function initDealChart() {
+  const ctx = document.getElementById('dealChart').getContext('2d');
+  const order = ['Medium','Small','Large'];
+  const data = order.map(k => RAW.dealsize[k]);
+  dealChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: order, datasets: [{ data, backgroundColor: ['#7c6cfc','#f7c948','#3ecfaa'], borderRadius: 8, borderSkipped: false }] },
+    options: {
+      ...chartDefaults,
+      plugins: { ...chartDefaults.plugins, tooltip: { ...chartDefaults.plugins.tooltip, callbacks: { label: ctx => ' ' + fmtFull(ctx.parsed.y) } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#e8e8f0', font: { family: 'DM Mono', size: 12 } } },
+        y: { grid: { color: '#2a2a38' }, ticks: { color: '#7a7a96', font: { family: 'DM Mono', size: 10 }, callback: v => fmt(v) } }
+      }
+    }
+  });
+}
+
+function renderClients() {
+  const maxVal = Math.max(...Object.values(RAW.clients));
+  const list = document.getElementById('clientList');
+  list.innerHTML = Object.entries(RAW.clients).map(([name, val], i) => `
+    <div class="client-row">
+      <span class="client-rank">${i+1}</span>
+      <span class="client-name">${name}</span>
+      <div class="client-bar-wrap"><div class="client-bar" style="width:${(val/maxVal*100).toFixed(1)}%"></div></div>
+      <span class="client-val">${fmt(val)}</span>
+    </div>
+  `).join('');
+}
+
+// ── YEAR FILTER ───────────────────────────────────────────
+function setYear(year) {
+  document.querySelectorAll('.year-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Update KPIs
+  const rev = RAW.revenue[year] || RAW.revenue.all;
+  const ord = RAW.orders[year] || RAW.orders.all;
+  const qty = RAW.qty[year] || RAW.qty.all;
+  const avg = rev / ord;
+
+  document.getElementById('kpi-rev').textContent = fmt(rev);
+  document.getElementById('kpi-ord').textContent = ord;
+  document.getElementById('kpi-avg').textContent = fmt(avg);
+  document.getElementById('kpi-qty').textContent = qty.toLocaleString('ru-RU');
+  document.getElementById('kpi-rev-sub').textContent = year === 'all' ? 'за весь период' : `за ${year} год`;
+  document.getElementById('kpi-ord-sub').textContent = year === 'all' ? 'всего заказов' : `заказов в ${year}`;
+  document.getElementById('kpi-avg-sub').textContent = 'на заказ';
+  document.getElementById('kpi-qty-sub').textContent = 'единиц';
+
+  // Update line chart
+  const newData = buildLineData(year);
+  lineChart.data = newData;
+  lineChart.options.plugins.legend.display = year === 'all';
+  lineChart.update();
+}
+
+// ── INIT ──────────────────────────────────────────────────
+initLineChart('all');
+initDonutChart();
+initTerrChart();
+initDealChart();
+renderClients();
+</script>
+</body>
+</html>
